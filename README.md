@@ -11,21 +11,9 @@ aioevt - After creating the manager, you can emit 'global' events in a thread-sa
 
 ## Documentation
 
-#### Create a manager
-
-    import aiovt
-    mgr = aiovt.Manager()
-    
+#### Create a manager    
 
 #### Register an event
-
-    def double(number):
-        print("Doubling a number")
-        return number * 2
-    
-    mgr.register("double", double)
-
-***Signature***
 
     def register(self, name: str, func: Callable, loop: asyncio.AbstractEventLoop=None, recurring: bool=True):
         """
@@ -37,10 +25,6 @@ aioevt - After creating the manager, you can emit 'global' events in a thread-sa
         :param recurring: whether or not the event should be re-registered after it is
         """
 #### Emitting an event
-
-    mgr.emit("double", 10)
-
-***Signature***
 
     def emit(self, name: str, *args):
         """
@@ -56,15 +40,20 @@ aioevt - After creating the manager, you can emit 'global' events in a thread-sa
 
 #### Waiting for an event
 
-    # this will hang until "double" is emitted.
-    await mgr.wait("double")
+    @asyncio.coroutine
+    def wait(self, name: str, timeout: float=None):
+        """
+        Wait until an event fures and return the emit parameters
+
+        :param name: Event Name
+        :param loop: the event loop
+        :param timeout: the maximum time (in seconds) to wait before it raises an exception
+        :return the parameters passed to `emit`
+        :raises asyncio.TimeoutError when necessary
+        """
 
 
 #### Unregistering an event
-
-    mgr.unregister("double")
-    
-***Signature***
 
     def unregister(self, name=None, func=None):
         """
