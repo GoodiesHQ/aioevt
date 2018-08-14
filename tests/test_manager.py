@@ -135,7 +135,7 @@ def test_wait():
     def run():
         loop.call_soon(mgr.emit, "test_wait", 7)
         value = yield from mgr.wait("test_wait")
-        assert value == (7,)
+        assert value == 7
 
     loop.run_until_complete(run())
 

@@ -61,7 +61,6 @@ class Manager:
         with self._events_lock:
             new_events = []
             for evt in self._events.pop(name, []):
-                print(evt)
                 is_async = asyncio.iscoroutinefunction(evt.func)
                 try:
                     if is_async:
@@ -71,6 +70,7 @@ class Manager:
                     if evt.recurring:
                         new_events.append(evt)
                 except Exception as e:
+                    # TODO: handle debugging error output in a more streamlined way
                     print(e, file=sys.stderr)
             if new_events:
                 self._events[name] = new_events
@@ -92,7 +92,7 @@ class Manager:
 
         def callback(*args):
             nonlocal data, evt
-            data = args
+            data = args[0] if len(args) == 1 else args
             evt.set()
 
         self.register(name, callback, recurring=False)
