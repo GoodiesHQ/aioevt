@@ -24,7 +24,20 @@ class Manager:
         self._events = defaultdict(list)
         self._events_lock = LockType()
 
-    def register(self, name: str, func: Callable, loop: asyncio.AbstractEventLoop=None, recurring: bool=True):
+    def on(self, name: str, loop: asyncio.AbstractEventLoop = None, recurring: bool = True):
+        """
+        A function decorator for registering events
+
+        :param name: event name.
+        :param loop: the loop from which you want the callback to be executed
+        :param recurring: whether or not the event should be re-registered after it is
+        """
+        def wrapper(func):
+            self.register(name, func, loop, recurring)
+            return func
+        return wrapper
+
+    def register(self, name: str, func: Callable, loop: asyncio.AbstractEventLoop = None, recurring: bool = True):
         """
         Register a global event to be triggered from a provided event loop when a named event is emitted.
 

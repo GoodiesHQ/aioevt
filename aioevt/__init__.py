@@ -11,7 +11,7 @@ from .event import Event
 from .manager import Manager
 
 name = "aioevt"
-version = (1, 0, 1)
+version = (1, 2, 0)
 
 __all__ = ["Event", "Manager", "name", "version"]
 
