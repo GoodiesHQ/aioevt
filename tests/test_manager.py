@@ -1,7 +1,8 @@
-from threading import Thread
+import threading
 import asyncio
 
-from aioevt import Event, Manager
+from aioevt.event import EvtData
+from aioevt.manager import Manager
 
 
 def new_event_loop():
@@ -17,7 +18,7 @@ def test_manager_creation():
 
 def test_register():
     mgr = Manager()
-    assert len(mgr._events) == 0
+
     mgr.register("test_register", lambda: None, recurring=False)
     assert len(mgr._events) == 1
 
@@ -30,10 +31,18 @@ def test_unregister():
     mgr.unregister("test_unregister")
     assert len(mgr._events) == 0
 
+    def callback():
+        pass
+
+    mgr.register("test_unregister", callback, recurring=False)
+    assert len(mgr._events) == 1
+    mgr.unregister(func=callback)
+    assert len(mgr._events) == 0
+
 
 def test_sync_callback():
     loop = new_event_loop()
-    mgr = Manager()
+    mgr = Manager(loop=loop)
     evt = asyncio.Event()
     working = False
 
@@ -42,7 +51,7 @@ def test_sync_callback():
         working = True
         evt.set()
 
-    mgr.register("test_sync_callback", callback, loop)
+    mgr.register("test_sync_callback", callback, loop, False)
     mgr.emit("test_sync_callback")
     loop.run_until_complete(evt.wait())
     assert working is True
@@ -54,8 +63,7 @@ def test_async_callback():
     evt = asyncio.Event()
     working = False
 
-    @asyncio.coroutine
-    def callback():
+    async def callback():
         nonlocal evt, working
         working = True
         evt.set()
@@ -67,75 +75,111 @@ def test_async_callback():
 
 
 def test_multithread_sync_callback():
-    mgr = Manager()
+    main_loop = asyncio.get_event_loop()
+    task_loop = asyncio.new_event_loop()
+    mgr = Manager(loop=main_loop)
+    evt = asyncio.Event()
 
-    def run_emit():
-        mgr.emit("test_multithread_sync_callback")
-
-    def run_register():
-        loop = new_event_loop()
-        working = False
-
-        def callback():
-            nonlocal loop, working
-            assert working is False
-            working = True
-            loop.stop()
-
-        loop = new_event_loop()
-        mgr.register("test_multithread_sync_callback", callback, False)
-
-        t2 = Thread(target=run_emit)
-        t2.start()
-        t2.join()
-        loop.run_forever()
-        assert working is True
-
-    t1 = Thread(target=run_register)
+    @mgr.on("test_multithread_sync_callback", loop=task_loop, recurring=False)
+    def callback(*args, **kwargs):
+        nonlocal main_loop, evt
+        main_loop.call_soon_threadsafe(evt.set)
+        mgr.emit("test_multithread_sync_callback_done")
+    
+    t1 = threading.Thread(
+        target=task_loop.run_until_complete,
+        args=[mgr.wait("test_multithread_sync_callback_done")],
+    )
     t1.start()
-    t1.join()
+    mgr.emit("test_multithread_sync_callback")
+    task = asyncio.wait_for(evt.wait(), 2.0)
+    main_loop.run_until_complete(task)
+    t1.join(1.0)
+    assert not t1.is_alive()
+    assert evt.is_set()
 
 
 def test_multithread_async_callback():
-    mgr = Manager()
+    main_loop = asyncio.get_event_loop()
+    task_loop = asyncio.new_event_loop()
+    mgr = Manager(loop=main_loop)
+    evt = asyncio.Event()
 
-    def run_emit():
-        mgr.emit("test_multithread_async_callback")
-
-    def run_register():
-        loop = new_event_loop()
-        working = False
-
-        @asyncio.coroutine
-        def callback():
-            nonlocal loop, working
-            assert working is False
-            working = True
-            loop.stop()
-
-        loop = new_event_loop()
-        mgr.register("test_multithread_async_callback", callback, False)
-
-        t2 = Thread(target=run_emit)
-        t2.start()
-        t2.join()
-        loop.run_forever()
-        assert working is True
-
-    t1 = Thread(target=run_register)
+    @mgr.on("test_multithread_async_callback", loop=task_loop, recurring=False)
+    async def callback(*args, **kwargs):
+        nonlocal main_loop, evt
+        main_loop.call_soon_threadsafe(evt.set)
+        mgr.emit("test_multithread_async_callback_done")
+    
+    t1 = threading.Thread(
+        target=task_loop.run_until_complete,
+        args=[mgr.wait("test_multithread_async_callback_done")],
+    )
     t1.start()
-    t1.join()
+    mgr.emit("test_multithread_async_callback")
+    task = asyncio.wait_for(evt.wait(), 2.0)
+    main_loop.run_until_complete(task)
+    t1.join(1.0)
+    assert not t1.is_alive()
+    assert evt.is_set()
+
+
+def test_args_and_kwargs():
+    async def run_test():
+        mgr = Manager()
+        evt = asyncio.Event()
+        args, kwargs = None, None
+
+        @mgr.on("test_args_and_kwargs", recurring=False)
+        def foo(arg1, arg2, *, kwarg1=None):
+            nonlocal args, kwargs
+            args = [arg1, arg2]
+            kwargs = dict(kwarg1=kwarg1)
+            evt.set()
+        
+        mgr.emit(
+            "test_args_and_kwargs",
+            args=(1, 2), kwargs={"kwarg1": "a"},
+        )
+        await asyncio.wait_for(evt.wait(), 1.0)
+        assert args == [1, 2]
+        assert kwargs == {"kwarg1": "a"}
+    asyncio.run(run_test())
+
+def test_evt_data():
+    async def run_test():
+        mgr = Manager()
+        evt = asyncio.Event()
+        args, kwargs = None, None
+
+        @mgr.on("test_evt_data", recurring=False)
+        def foo(arg1, arg2, *, kwarg1=None):
+            nonlocal args, kwargs
+            args = [arg1, arg2]
+            kwargs = dict(kwarg1=kwarg1)
+            evt.set()
+        
+        mgr.emit(
+            "test_evt_data",
+            data=EvtData(args=(1, 2), kwargs={"kwarg1": "a"}),
+        )
+        await asyncio.wait_for(evt.wait(), 1.0)
+        assert args == [1, 2]
+        assert kwargs == {"kwarg1": "a"}
+    asyncio.run(run_test())
+
 
 
 def test_wait():
     loop = new_event_loop()
     mgr = Manager()
 
-    @asyncio.coroutine
-    def run():
-        loop.call_soon(mgr.emit, "test_wait", 7)
-        value = yield from mgr.wait("test_wait")
-        assert value == 7
+    async def run():
+        task = loop.create_task(mgr.wait("test_wait"))
+        loop.call_soon(mgr.emit, "test_wait", [7], {"a": 3})
+        value = await task
+        assert value.args[0] == 7
+        assert value.kwargs["a"] == 3
 
     loop.run_until_complete(run())
 
@@ -143,23 +187,25 @@ def test_multithread_wait():
     mgr = Manager()
 
     def run_emit():
-        mgr.emit("test_multithread_wait", 7, 3)
+        mgr.emit("test_multithread_wait", args=(7, 3))
 
     def run_wait():
         loop = new_event_loop()
 
-        @asyncio.coroutine
-        def run():
-            t2 = Thread(target=run_emit)
+        async def run():
+            nonlocal loop
+            t2 = threading.Thread(target=run_emit)
+            task = loop.create_task(mgr.wait("test_multithread_wait"))
             loop.call_soon(t2.start)
-            value = yield from mgr.wait("test_multithread_wait")
+            value = await task
             t2.join()
-            assert value == (7, 3)
+            assert value.args == (7, 3)
             loop.stop()
 
         asyncio.ensure_future(run())
         loop.run_forever()
 
-    t1 = Thread(target=run_wait)
+    t1 = threading.Thread(target=run_wait)
     t1.start()
-    t1.join()
+    t1.join(1.0)
+    assert not t1.is_alive()

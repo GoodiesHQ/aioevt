@@ -1,20 +1,18 @@
 """
-AIOEVT - Simple Asyncio Event Management
+AIOEVT - Simple Asyncio-friendly Event Management
 
-Package exports the event and manager classes.
+Events can be emitted from, and waited on, any event loop or thread.
 
-Managers are used for managing the event list.
-An Event is just a named tuple.
+Waiting for an event will return the parameters passed into it when emitted.
 """
 
-from .event import Event
+from .event import Evt, EvtData, Event, Data
 from .manager import Manager
 
 name = "aioevt"
-version = (1, 2, 0)
+version = (2, 0, 0)
 
-__all__ = ["Event", "Manager", "name", "version"]
+__all__ = ["Evt", "Event", "EvtData", "Data", "Manager", "name", "version"]
 
 __author__ = "Austin Archer"
-__version__ = "0.1.1"
-
+__version__ = ".".join(map(str, version))
