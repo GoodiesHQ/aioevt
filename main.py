@@ -44,6 +44,12 @@ def sync_task(evt: asyncio.Event, delay: float = 1.0):
     set_it(evt, main_loop)
     mgr.emit("complete", kwargs={"func": "sync"})
 
+# mgr = aioevt.Manager(loop=main_loop)
+
+@mgr.on("test")
+def on_test_event(name, count=1):
+    print(*[name]*count, sep="\n")
+
 async def main():
     # create an event that will control access between threads
     evt = asyncio.Event() 
@@ -70,12 +76,12 @@ async def main():
     # By default, it will retry 5 times to address delay issues when starting
     # new threads
 
-    mgr.emit("AsyncEvent", args=(evt, 0.1))                     # invoke with ARGS
-    resp = await mgr.wait("complete")
+    mgr.proxy.AsyncEvent(evt, 0.1)                              # invoke using proxy
+    resp = await mgr.wait("complete", 1.0)
     print("Completed from", resp.kwargs["func"])
 
-    mgr.emit("SyncEvent", kwargs=dict(evt=evt, delay=1.0))      # invoke with KWARGS
-    resp = await mgr.wait("complete")
+    mgr.emit("SyncEvent", kwargs=dict(evt=evt, delay=0.1))      # invoke with emit using KWARGS
+    resp = await mgr.wait("complete", 1.0)
     print("Completed from", resp.kwargs["func"])
 
     # wait for the event to complete
