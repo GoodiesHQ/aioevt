@@ -77,7 +77,8 @@ def test_async_callback():
 def test_multithread_sync_callback():
     main_loop = asyncio.get_event_loop()
     task_loop = asyncio.new_event_loop()
-    mgr = Manager(loop=main_loop)
+
+    mgr = Manager(main_loop)
     evt = asyncio.Event()
 
     @mgr.on("test_multithread_sync_callback", loop=task_loop, recurring=False)
@@ -108,7 +109,7 @@ def test_multithread_async_callback():
     @mgr.on("test_multithread_async_callback", loop=task_loop, recurring=False)
     async def callback(*args, **kwargs):
         nonlocal main_loop, evt
-        main_loop.call_soon_threadsafe(evt.set)
+        evt._loop.call_soon_threadsafe(evt.set)
         mgr.emit("test_multithread_async_callback_done")
     
     t1 = threading.Thread(
@@ -191,6 +192,8 @@ def test_multithread_wait():
 
     def run_wait():
         loop = new_event_loop()
+        asyncio.set_event_loop(loop)
+        mgr.loop = loop
 
         async def run():
             nonlocal loop

@@ -85,17 +85,18 @@ class Manager:
             self._events[name].append(
                 Evt(
                     func=func,
-                    loop=loop or asyncio.get_event_loop(),
+                    loop=loop,
                     recurring=recurring,
                 )
             )
     
     @property
     def loop(self):
-        try:
+        from contextlib import suppress
+        with suppress(RuntimeError):
             return self._loop or asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.get_event_loop()
+        with suppress(RuntimeError):
+            return self._loop or asyncio.get_event_loop()
     
     @loop.setter
     def loop(self, new_loop: Optional[asyncio.AbstractEventLoop]):
@@ -118,10 +119,11 @@ class Manager:
         :param kwargs: addition event keyword arguments
         :param loop: asyncio event loop from which you want the event to be emitted
         """
-        event = self._events.get(name)
-        loop = loop or event.loop or asyncio.get_event_loop()
+        # event = self._events.get(name)
+        loop = loop or self.loop
+        assert loop.is_running()
         loop.call_later(delay, self.emit, name,
-                        args=args, kwargs=kwargs, retries=retries)
+                        args=args, kwargs=kwargs, retries=retries, loop=loop)
     @property
     def proxy(self):
         return type("Proxy", (), {
@@ -133,10 +135,11 @@ class Manager:
 
     def emit(self,
              name: str,
-             args: tuple = (),
-             kwargs: dict = None,
-             retries: int = None,
-             data: EvtData = None,
+             args: Optional[tuple] = (),
+             kwargs: Optional[dict] = None,
+             retries: Optional[int] = None,
+             data: Optional[EvtData] = None,
+             target_loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         """
         Emit a signal with arbitrary parameters.
@@ -165,22 +168,31 @@ class Manager:
                 re_add = False
                 try:
                     # Re-add event if recurring (or event loop hasn't started)
-                    if not evt.loop.is_running():
-                        if retries == 0:  # no more retries
-                            raise RuntimeError("The target event loop is not running")
-                        self.loop.call_later(
-                            self.async_retry_delay,
-                            self.emit,
-                            name, args, kwargs, retries - 1,
-                        )
-                        re_add = True
+                    control_loop = self.loop
+                    target_loop = evt.loop or control_loop
+
+                    if not target_loop:
+                        raise RuntimeError("There is no accessible event loop")
+
+                    if not target_loop.is_running():
+                        if not control_loop.is_running():
+                            if retries == 0:
+                                raise RuntimeError(
+                                    "The target event loop is not running"
+                                )
+                            control_loop.call_later(
+                                self.async_retry_delay,
+                                self.emit,
+                                name, args, kwargs, retries - 1,
+                            )
+                            re_add = True
                     elif asyncio.iscoroutinefunction(evt.func):
                         asyncio.run_coroutine_threadsafe(
                             evt.func(*(args or ()), **(kwargs or {})),
-                            loop=evt.loop,
+                            loop=target_loop,
                         )
                     elif callable(evt.func):
-                        evt.loop.call_soon_threadsafe(
+                        target_loop.call_soon_threadsafe(
                             partial(
                                 evt.func, *args, **(kwargs or {}),
                             )
@@ -190,6 +202,8 @@ class Manager:
                         re_add = False
                     if re_add or evt.recurring:
                         new_events.append(evt)
+                except RuntimeError:
+                    raise
                 except Exception as e:
                     # TODO better output handling
                     import traceback
@@ -222,7 +236,7 @@ class Manager:
             # indicate the callback is complete and data is set
             evt.set()
 
-        self.register(name, callback, recurring=False)
+        self.register(name, callback, loop=asyncio.get_running_loop(), recurring=False)
         await asyncio.wait_for(evt.wait(), timeout=timeout)
         return data
 

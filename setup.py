@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="aioevt",
-    version="2.2.0",
+    version="2.2.1",
     author="Austin Archer",
     author_email="aarcher@protonmail.com",
     long_description=open("README.md", "r").read(),
