@@ -111,6 +111,14 @@ class Manager:
         loop = loop or event.loop or asyncio.get_event_loop()
         loop.call_later(delay, self.emit, name,
                         args=args, kwargs=kwargs, retries=retries)
+    @property
+    def proxy(self):
+        return type("Proxy", (), {
+            "__getattribute__": lambda s, name: \
+                partial(object.__getattribute__(s, "func"), name),
+            "func": lambda _, name, *a, **k:\
+                self.emit(name, args=a, kwargs=k),
+        })()
 
     def emit(self,
              name: str,
