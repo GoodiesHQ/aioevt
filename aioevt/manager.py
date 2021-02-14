@@ -4,7 +4,7 @@ Simple asyncio task manager
 from collections import defaultdict
 from functools import partial, wraps
 from threading import Condition, Lock as LockType
-from typing import Callable, Union
+from typing import Callable, Union, Optional
 import asyncio
 import sys
 
@@ -27,7 +27,7 @@ class Manager:
         """
         Initialize the Manager class
         """
-        self._loop = loop or asyncio.get_event_loop()
+        self._loop = loop
         self._events = defaultdict(list)
         self._async_retry_delay = async_retry_delay
         self._async_retry_count = async_retry_count
@@ -89,6 +89,17 @@ class Manager:
                     recurring=recurring,
                 )
             )
+    
+    @property
+    def loop(self):
+        try:
+            return self._loop or asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.get_event_loop()
+    
+    @loop.setter
+    def loop(self, new_loop: Optional[asyncio.AbstractEventLoop]):
+        self._loop = new_loop
 
     def emit_after(self,
                    delay: float,
@@ -157,7 +168,7 @@ class Manager:
                     if not evt.loop.is_running():
                         if retries == 0:  # no more retries
                             raise RuntimeError("The target event loop is not running")
-                        self._loop.call_later(
+                        self.loop.call_later(
                             self.async_retry_delay,
                             self.emit,
                             name, args, kwargs, retries - 1,

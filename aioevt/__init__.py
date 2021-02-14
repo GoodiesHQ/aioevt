@@ -10,7 +10,7 @@ from .event import Evt, EvtData, Event, Data
 from .manager import Manager
 
 name = "aioevt"
-version = (2, 1, 0)
+version = (2, 2, 0)
 
 __all__ = ["Evt", "Event", "EvtData", "Data", "Manager", "name", "version"]
 

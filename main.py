@@ -13,9 +13,8 @@ import gc
 import inspect
 
 # Create handles to our two event loops
-main_loop = asyncio.get_event_loop()
 task_loop = asyncio.new_event_loop()
-mgr = aioevt.Manager(loop=main_loop)
+mgr = aioevt.Manager()
 
 # Patch asyncio Event object to allow a thread-safe "set" variant
 asyncio.Event.set_threadsafe = lambda self: self._loop.call_soon_threadsafe(self.set)
@@ -32,27 +31,20 @@ def set_it(evt, loop):
 
 @mgr.on("AsyncEvent", loop=task_loop) 
 async def async_task(evt: asyncio.Event,  delay: float = 1.0):
-    global main_loop
     await asyncio.sleep(delay)
-    set_it(evt, main_loop)
-    mgr.emit("complete", kwargs={"func": "async"})
+    set_it(evt, evt._loop)
+    mgr.proxy.complete(func="async")
 
 @mgr.on("SyncEvent", loop=task_loop) 
 def sync_task(evt: asyncio.Event, delay: float = 1.0):
-    global main_loop
     time.sleep(delay)
-    set_it(evt, main_loop)
-    mgr.emit("complete", kwargs={"func": "sync"})
-
-# mgr = aioevt.Manager(loop=main_loop)
-
-@mgr.on("test")
-def on_test_event(name, count=1):
-    print(*[name]*count, sep="\n")
+    set_it(evt, evt._loop)
+    mgr.proxy.complete(func="sync")
 
 async def main():
     # create an event that will control access between threads
     evt = asyncio.Event() 
+    print(id(asyncio.get_event_loop()))
 
     # get handles to 2 threads, MAIN and TASK
     main_thread = threading.current_thread()
@@ -89,8 +81,6 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        main_loop.run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("[+] Exiting")
-    finally:
-        main_loop.close()

@@ -2,20 +2,13 @@
 
 import setuptools
 
-from aioevt import __version__ as aioevt_version
-from aioevt import __author__ as aioevt_author
-
-
-with open("README.md", "r") as fin:
-    long_description = fin.read()
-
 
 setuptools.setup(
     name="aioevt",
-    version=aioevt_version,
-    author=aioevt_author,
+    version="2.2.0",
+    author="Austin Archer",
     author_email="aarcher@protonmail.com",
-    long_description=long_description,
+    long_description=open("README.md", "r").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/GoodiesHQ/aioevt",
     packages=setuptools.find_packages(),
